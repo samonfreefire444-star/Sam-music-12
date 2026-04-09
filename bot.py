@@ -6,6 +6,24 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 import yt_dlp
+from flask import Flask
+from threading import Thread
+
+# Flask App for 24/7 Hosting
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "SAM MUSIC IS ALIVE!"
+
+def run():
+    # Render-ൽ പോർട്ട് ഓട്ടോമാറ്റിക്കായി ലഭിക്കാൻ os.getenv ഉപയോഗിക്കുന്നു
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host='0.0.0.0', port=port)
+
+def keep_alive():
+    t = Thread(target=run)
+    t.start()
 
 sys.stdout.reconfigure(line_buffering=True)
 sys.stderr.reconfigure(line_buffering=True)
@@ -42,7 +60,6 @@ FFMPEG_OPTS = {
     'options': '-vn',
 }
 
-
 class Song:
     def __init__(self, title, webpage_url, duration, thumbnail, requester=None):
         self.title = title
@@ -69,7 +86,6 @@ class Song:
                 info = info['entries'][0]
             return info.get('url') if info else None
 
-
 class MusicPlayer:
     def __init__(self):
         self.queue = []
@@ -83,15 +99,12 @@ class MusicPlayer:
         self.current = None
         self.loop_mode = "off"
 
-
 players = {}
-
 
 def get_player(guild_id):
     if guild_id not in players:
         players[guild_id] = MusicPlayer()
     return players[guild_id]
-
 
 async def search_yt(query):
     loop = asyncio.get_event_loop()
@@ -120,7 +133,6 @@ async def search_yt(query):
             log.error(f"Search error: {e}")
             return None
 
-
 def embed_now_playing(song):
     e = discord.Embed(
         title="🎵 ഇപ്പോൾ play ആകുന്നത്",
@@ -134,25 +146,6 @@ def embed_now_playing(song):
         e.set_thumbnail(url=song.thumbnail)
     e.set_footer(text="🎶 SAM MUSIC • Malayalam")
     return e
-
-
-def embed_queue(p):
-    e = discord.Embed(title="📜 Queue", color=discord.Color.blurple())
-    if p.current:
-        e.add_field(name="▶️ ഇപ്പോൾ", value=f"**{p.current.title}** [{p.current.duration_str}]", inline=False)
-    if p.queue:
-        txt = "\n".join(f"`{i}.` **{s.title}** [{s.duration_str}]" for i, s in enumerate(p.queue[:10], 1))
-        if len(p.queue) > 10:
-            txt += f"\n*...{len(p.queue)-10} more*"
-        e.add_field(name="📋 അടുത്തത്", value=txt, inline=False)
-    else:
-        e.add_field(name="📋 അടുത്തത്", value="Queue ശൂന്യം", inline=False)
-    loop_label = {"off": "❌ Off", "single": "🔂 Single", "queue": "🔁 Queue"}
-    e.add_field(name="Loop", value=loop_label.get(p.loop_mode, "Off"), inline=True)
-    e.add_field(name="Queue size", value=str(len(p.queue)), inline=True)
-    e.set_footer(text="🎶 SAM MUSIC • Malayalam")
-    return e
-
 
 class Controls(discord.ui.View):
     def __init__(self, guild_id):
@@ -194,14 +187,6 @@ class Controls(discord.ui.View):
         else:
             await interaction.response.send_message("❌ VC-ൽ ഇല്ല!", ephemeral=True)
 
-    @discord.ui.button(label="🔄 Loop", style=discord.ButtonStyle.success)
-    async def loop(self, interaction, _):
-        p = get_player(self.guild_id)
-        p.loop_mode = {"off": "single", "single": "queue", "queue": "off"}[p.loop_mode]
-        labels = {"off": "❌ Loop Off", "single": "🔂 Single loop", "queue": "🔁 Queue loop"}
-        await interaction.response.send_message(labels[p.loop_mode], ephemeral=True)
-
-
 async def play_next(guild_id):
     p = get_player(guild_id)
     vc = p.voice_client
@@ -242,10 +227,8 @@ async def play_next(guild_id):
             asyncio.run_coroutine_threadsafe(play_next(guild_id), bot.loop)
 
         vc.play(source, after=after_play)
-
         if p.text_channel:
             await p.text_channel.send(embed=embed_now_playing(song), view=Controls(guild_id))
-
     except Exception as e:
         log.error(f"play_next error: {e}")
         if p.text_channel:
@@ -258,7 +241,6 @@ async def play_next(guild_id):
             p.current = p.queue.pop(0)
             await play_next(guild_id)
 
-
 @bot.event
 async def on_ready():
     try:
@@ -266,7 +248,6 @@ async def on_ready():
         log.info(f"Logged in as {bot.user} | {len(synced)} commands synced | Opus: {discord.opus.is_loaded()}")
     except Exception as e:
         log.error(f"Sync failed: {e}")
-
 
 @bot.tree.command(name="play", description="ഒരു ഗാനം play ചെയ്യുക")
 @app_commands.describe(query="ഗാനത്തിന്റെ പേര് അല്ലെങ്കിൽ YouTube link")
@@ -325,7 +306,6 @@ async def play(interaction: discord.Interaction, query: str):
         ))
         await play_next(interaction.guild_id)
 
-
 @bot.tree.command(name="skip", description="ഇപ്പോഴത്തെ ഗാനം skip")
 async def skip(interaction: discord.Interaction):
     vc = get_player(interaction.guild_id).voice_client
@@ -333,3 +313,13 @@ async def skip(interaction: discord.Interaction):
         return await interaction.response.send_message("❌ Play ആകുന്നില്ല!", ephemeral=True)
     vc.stop()
     await interaction.response.send_message(embed=discord.Embed(title="⏭️ Skip!", color=discord.Color.blurple()))
+
+# ബോട്ട് റൺ ചെയ്യുന്ന ഭാഗം
+if __name__ == "__main__":
+    # Render-ൽ Variables ടാബിൽ TOKEN എന്ന് തന്നെ നൽകുക
+    token = os.environ.get("TOKEN")
+    if token:
+        keep_alive() # Flask സർവർ സ്റ്റാർട്ട് ചെയ്യുന്നു
+        bot.run(token)
+    else:
+        log.error("TOKEN കണ്ടെത്തിയില്ല! Render settings പരിശോധിക്കുക.")
