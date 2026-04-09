@@ -333,6 +333,3 @@ async def skip(interaction: discord.Interaction):
         return await interaction.response.send_message("❌ Play ആകുന്നില്ല!", ephemeral=True)
     vc.stop()
     await interaction.response.send_message(embed=discord.Embed(title="⏭️ Skip!", color=discord.Color.blurple()))
-
-
-@bot.tree.command
